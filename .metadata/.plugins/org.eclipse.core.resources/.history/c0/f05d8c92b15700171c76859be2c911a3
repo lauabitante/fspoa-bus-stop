@@ -1,0 +1,153 @@
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Scanner;
+import smartcity.gtfs.*;
+import smartcity.util.*;
+
+public class BusRouter {
+	
+	private Map<String,Stop> stops;
+	private Map<String,Trip> trips;
+	private Scanner scan;
+	
+	// Construtor passando Stops e Trips
+	public BusRouter(Map<String,Stop> stops, Map<String,Trip> trips) {
+		this.stops = stops;
+		this.trips = trips;
+		scan = new Scanner(System.in);
+	}
+
+	/* startNewRoute: Inicia um novo calculo de Rota aonde:
+	 1 - é criada uma coordenada para o ponto de origem e para o ponto do destino
+	 2 - a partir destas coordenadas, se obtém a parada mais próxima da origem e do destino
+	 3 - solicita-se o quanto o usuário pretende caminhar até as paradas mais próximas.
+	 4 - a partir da distancia, são obtidas duas listas de Trips: as mais proximas das paradas de origem/destino
+	 5 - verifica-se qual dessas trips possui a parada de origem/destino e apresenta-a como a alternativa.
+	*/
+	public void startNewRoute() {
+		//1
+		GPSCoordinate originCoordinate = askUserToCreateCoordinate(scan);
+		GPSCoordinate destinyCoordinate = askUserToCreateCoordinate(scan);
+		
+		//2
+		Stop originStop = closestStopFrom(originCoordinate, stops);
+		Stop destinyStop = closestStopFrom(destinyCoordinate, stops);
+
+		//3
+		System.out.println("Informe o quanto pretende caminhar (em metros. ex: 150): ");
+		Double walkDistance = scan.nextDouble();
+	
+		//4
+		List<Trip> closestOriginTrips = getClosestTrips(originStop.getGPSCoordinate(), walkDistance, trips);
+		List<Trip> closestDestinyTrips = getClosestTrips(destinyStop.getGPSCoordinate(), walkDistance, trips);
+		
+		//5
+		Trip closestDestinyTrip = closestTripOf(destinyStop, walkDistance, closestDestinyTrips);
+		Trip closestOriginTrip = closestTripOf(originStop, walkDistance, closestOriginTrips);
+
+		System.out.println("Linha mais proxima da origem: ");
+		System.out.println(closestOriginTrip.getRoute());
+		
+		System.out.println("Linha mais proxima do destino: ");
+		System.out.println(closestDestinyTrip.getRoute());
+		
+		calculateStopSequence(closestOriginTrip, closestDestinyTrip, originStop, destinyStop, walkDistance);
+	}
+	
+	private void calculateStopSequence(Trip originTrip, Trip destinyTrip, Stop originStop, Stop destinyStop, Double threshold) {
+		
+		if(originTrip.hasStopNear(destinyStop.getGPSCoordinate(), threshold)) {
+			System.out.println();
+			System.out.println("#### BEST ROUTE ####");
+			System.out.print(originStop.getName());
+			System.out.print("(" + originTrip.getRoute().getShortName() + ")");
+			System.out.print(" --> ");
+			System.out.print(destinyStop.getName());
+			System.out.print("(" + destinyTrip.getRoute().getShortName() + ")");
+			System.out.print(" --> END :)");
+		} else {
+			for (Map.Entry<String, Stop> s : stops.entrySet()) {
+				Stop stop = s.getValue();
+				
+				if (originTrip.hasStopNear(stop.getGPSCoordinate(), threshold)) {
+					if (destinyTrip.hasStopNear(stop.getGPSCoordinate(), threshold)) {
+
+						List<Trip> allTrips = new ArrayList<Trip>(trips.values());
+						Trip middleTrip = closestTripOf(stop, threshold, allTrips);
+					
+						System.out.println();
+						System.out.println("#### BEST ROUTE ####");
+						System.out.print(originStop.getName());
+						System.out.print("(" + originTrip.getRoute().getShortName() + ")");
+						System.out.print(" -->");
+						System.out.print(stop.getName());
+						System.out.print("(" + middleTrip.getRoute().getShortName() + ")");
+						System.out.print(" -->");
+						System.out.print(destinyStop.getName());
+						System.out.print("(" + destinyTrip.getRoute().getShortName() + ")");
+						System.out.print(" --> END :)");
+						break;
+					}
+				}
+			}
+		}
+	}
+	
+	/* askUserToCreateCoordinate: Pede ao usuário que informe uma latitude e uma longitude, 
+	   a fim de criar uma coordenada. Ao final da funcão, retorna-se a coordenada.
+	*/
+	private GPSCoordinate askUserToCreateCoordinate(Scanner scan) {
+		System.out.println("Digite a latitude: ");
+		Double lat = scan.nextDouble();
+		System.out.println("Digite a longitude: ");
+		Double lng = scan.nextDouble();
+		return new GPSCoordinate(lat, lng);
+	}
+	
+	/* closestStopFrom: Dada uma coordenada e uma lista de paradas, retorna-se a 
+	 	parada mais próxima desta coordenada
+	 */
+	private Stop closestStopFrom(GPSCoordinate originCoordinate, Map<String,Stop> stops) {
+		Stop closestStop = new Stop("","",0,0);
+		Double maxValue = Double.MAX_VALUE;
+		
+		for(Map.Entry<String, Stop> stop : stops.entrySet()){
+			GPSCoordinate coordParada = stop.getValue().getGPSCoordinate();
+			Double stopsDistance = originCoordinate.distance(coordParada);
+			if (stopsDistance < maxValue) {
+				maxValue = stopsDistance;
+				closestStop = stop.getValue();
+			}
+		}
+		return closestStop;
+	}
+	
+	/* closestTripOf: dada uma parada e uma lista de trips, 
+	   retorna a trip que contém esta parada.
+	 */
+	private Trip closestTripOf(Stop stop, Double threshold, List<Trip> trips) {
+		Trip closestDestinyTrip = new Trip(null, null, null, null, 0, false);
+		for (Trip t : trips) {
+			if (t.hasStopNear(stop.getGPSCoordinate(), threshold)) {
+				closestDestinyTrip = t;
+				break;
+			}
+		}
+		return closestDestinyTrip;
+	}
+	
+	/* getClosestTrips: dada uma coordenada, um limite de caminhada e uma lista de trips,
+	   retorna-se todas as trips que tem uma parada que esteja dentro do limite da caminhada.
+	 */
+	private List<Trip> getClosestTrips(GPSCoordinate coord, Double threshold, Map<String,Trip> trips) {
+		List<Trip> closestTrips = new ArrayList<Trip>();
+		for (Map.Entry<String, Trip> t : trips.entrySet()) {
+			Trip trip = t.getValue();
+			if (trip.hasStopNear(coord, threshold)) {
+				closestTrips.add(t.getValue());
+			}
+		}
+		return closestTrips;
+	}	
+}
