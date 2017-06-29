@@ -53,9 +53,11 @@ public class BusRouter {
 	
 	private boolean getRoutForLines(List<Stop> originStops, List<Trip> closestDestinyTrips, Double threshold){
 		Boolean hasFoundTrip = false;
+		// Varre a lista das linhas do destino
 		for (Trip t : closestDestinyTrips) {
+			// Varre as paradas da origem
 			for (Stop s : originStops) {
-				// Caso tenha parada proxima a linha final, então é uma rota de 1 onibus apenas.
+				// Se a parada está próxima à linha, então é uma rota de 1 ônibus apenas.
 				if (t.hasStopNear(s.getGPSCoordinate(), threshold)) { 
 					System.out.println("LINHA DO DESTINO: " + t.getRoute().getLongName() + "|" + t.getRoute().getShortName());
 					System.out.println("PARADA: "+s.getName());
